@@ -4,12 +4,13 @@ import type { Job } from '../models/job.js';
 import multer from 'multer';
 import fs from 'fs';
 import csv from 'csv-parser';
-import { prisma } from '../db';
+import prisma from '../db.js';
 
 import { deduplicateRecords } from '../services/deduplicate.js';
 import type {  RecordData,
 } from '../services/deduplicate.js';
-import { normalizeValue } from '../utils/normalize';
+import { normalizeValue } from '../utils/normalize.js';
+import { jobQueue } from '../queue/queue.js';
 
 const upload = multer({ dest: 'uploads/' });
 
@@ -21,68 +22,25 @@ router.post(
   '/',
   upload.single('file'),
   async (req, res) => {
-    const records: RecordData[] = [];
+    const jobId = uuidv4();
 
-    if (!req.file) {
-      return res.status(400).json({
-        error: 'No file uploaded',
-      });
-    }
+    await prisma.job.create({
+      data: {
+        id: jobId,
+        status: 'pending',
+        uniqueCount: 0,
+        duplicateCount: 0,
+      },
+    });
 
-    fs.createReadStream(req.file.path)
-      .pipe(csv())
-      .on('data', (data) => {
-        records.push({
-          name: data.name,
-        });
-      })
-      .on('end', async () => {
-        try {
-          const results = deduplicateRecords(records);
-      
-          const jobId = uuidv4();
-      
-          await prisma.job.create({
-            data: {
-              id: jobId,
-              status: 'completed',
-              uniqueCount: results.uniqueRecords.length,
-              duplicateCount: results.duplicates.length,
-      
-              results: {
-                create: [
-                  ...results.uniqueRecords.map((r) => ({
-                    name: r.name,
-                    normalizedName: normalizeValue(r.name),
-                    isDuplicate: false,
-                  })),
-      
-                  ...results.duplicates.map((r) => ({
-                    name: r.name,
-                    normalizedName: normalizeValue(r.name),
-                    isDuplicate: true,
-                  })),
-                ],
-              },
-            },
-          });
-      
-          fs.unlinkSync(req.file.path);
-      
-          res.json({
-            jobId,
-            uniqueRecords: results.uniqueRecords.length,
-            duplicates: results.duplicates.length,
-          });
-        } catch (error) {
-          console.error(error);
-      
-          res.status(500).json({
-            error: 'Failed to process file',
-          });
-        }
-      });
+    await jobQueue.add('process-job', {
+      jobId,
+    });
 
+    res.json({
+      jobId,
+      status: 'pending',
+    });
   }
 );
 
