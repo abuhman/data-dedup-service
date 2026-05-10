@@ -8,12 +8,14 @@ datasource db {
 }
 
 model Job {
-  id          String   @id
-  status      String
-  createdAt   DateTime @default(now())
+  id              String   @id
+  status          String
+  createdAt       DateTime @default(now())
 
-  uniqueCount Int
-  duplicateCount Int
+  filePath        String?
+
+  uniqueCount     Int
+  duplicateCount  Int
 
   results Result[]
 }

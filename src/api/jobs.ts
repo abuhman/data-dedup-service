@@ -22,12 +22,20 @@ router.post(
   '/',
   upload.single('file'),
   async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({
+        error: 'No file uploaded',
+      });
+    }
+
     const jobId = uuidv4();
 
     await prisma.job.create({
       data: {
         id: jobId,
         status: 'pending',
+        filePath: req.file.path,
+
         uniqueCount: 0,
         duplicateCount: 0,
       },
