@@ -11,6 +11,7 @@ import fs from 'fs';
 new Worker(
   'deduplication',
   async (job) => {
+    try {
     const dbJob = await prisma.job.findUnique({
       where: {
         id: job.data.jobId,
@@ -27,6 +28,7 @@ new Worker(
       },
       data: {
         status: 'processing',
+        startedAt: new Date(),
       },
     });
 
@@ -58,8 +60,11 @@ new Worker(
       },
       data: {
         status: 'completed',
+        completedAt: new Date(),
+    
         uniqueCount:
           results.uniqueRecords.length,
+    
         duplicateCount:
           results.duplicates.length,
       },
@@ -69,6 +74,25 @@ new Worker(
       `Completed processing ${dbJob.id}`
     );
     fs.unlinkSync(dbJob.filePath);
+
+    } catch (error) {
+      console.error(error);
+
+      await prisma.job.update({
+        where: {
+          id: job.data.jobId,
+        },
+        data: {
+          status: 'failed',
+          failedReason:
+            error instanceof Error
+              ? error.message
+              : 'Unknown error',
+        },
+      });
+    
+      throw error;
+    }
   },
   {
     connection: {

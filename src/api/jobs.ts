@@ -41,9 +41,19 @@ router.post(
       },
     });
 
-    await jobQueue.add('process-job', {
-      jobId,
-    });
+    await jobQueue.add(
+      'process-job',
+      {
+        jobId,
+      },
+      {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 2000,
+        },
+      }
+    );
 
     res.json({
       jobId,
