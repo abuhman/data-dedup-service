@@ -32,42 +32,80 @@ new Worker(
       },
     });
 
+    const claimedJob =
+  await prisma.job.updateMany({
+    where: {
+      id: job.data.jobId,
+      status: 'pending',
+    },
+
+    data: {
+      status: 'processing',
+      startedAt: new Date(),
+      processingToken: crypto.randomUUID(),
+    },
+  });
+
+  if (claimedJob.count === 0) {
+    console.log(
+      `Job already claimed: ${job.data.jobId}`
+    );
+  
+    return;
+  }
+
+    await prisma.result.deleteMany({
+      where: {
+        jobId: dbJob.id,
+      },
+    });
+
     const results = await processFile(
       dbJob.filePath
     );
 
-    await prisma.result.createMany({
-      data: [
-        ...results.uniqueRecords.map((r) => ({
-          name: r.name,
-          normalizedName: normalizeValue(r.name),
-          isDuplicate: false,
+    await prisma.$transaction(async (tx) => {
+      await tx.result.deleteMany({
+        where: {
           jobId: dbJob.id,
-        })),
-
-        ...results.duplicates.map((r) => ({
-          name: r.name,
-          normalizedName: normalizeValue(r.name),
-          isDuplicate: true,
-          jobId: dbJob.id,
-        })),
-      ],
-    });
-
-    await prisma.job.update({
-      where: {
-        id: dbJob.id,
-      },
-      data: {
-        status: 'completed',
-        completedAt: new Date(),
+        },
+      });
     
-        uniqueCount:
-          results.uniqueRecords.length,
+      await tx.result.createMany({
+        data: [
+          ...results.uniqueRecords.map((r) => ({
+            name: r.name,
+            normalizedName:
+              normalizeValue(r.name),
+            isDuplicate: false,
+            jobId: dbJob.id,
+          })),
     
-        duplicateCount:
-          results.duplicates.length,
-      },
+          ...results.duplicates.map((r) => ({
+            name: r.name,
+            normalizedName:
+              normalizeValue(r.name),
+            isDuplicate: true,
+            jobId: dbJob.id,
+          })),
+        ],
+      });
+    
+      await tx.job.update({
+        where: {
+          id: dbJob.id,
+        },
+        data: {
+          status: 'completed',
+          completedAt: new Date(),
+    
+          uniqueCount:
+            results.uniqueRecords.length,
+    
+          duplicateCount:
+            results.duplicates.length,
+        },
+      });
     });
 
     console.log(
@@ -81,7 +119,9 @@ new Worker(
       await prisma.job.update({
         where: {
           id: job.data.jobId,
-        },
+          status: 'processing',
+        }
+      
         data: {
           status: 'failed',
           failedReason:

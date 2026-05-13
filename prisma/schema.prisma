@@ -16,6 +16,10 @@ model Job {
 
   failedReason    String?
 
+  processingToken String?
+
+  progress Int @default(0)
+
   startedAt   DateTime?
   completedAt DateTime?
 
