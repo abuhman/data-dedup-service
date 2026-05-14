@@ -7,6 +7,7 @@ import { normalizeValue } from '../utils/normalize.js';
 import { deduplicateRecords } from '../services/deduplicate.js';
 import type { RecordData } from '../services/deduplicate.js';
 import fs from 'fs';
+import { logger } from '../utils/logger';
 
 new Worker(
   'deduplication',
@@ -21,16 +22,6 @@ new Worker(
     if (!dbJob || !dbJob.filePath) {
       throw new Error('Job file not found');
     }
-
-    await prisma.job.update({
-      where: {
-        id: dbJob.id,
-      },
-      data: {
-        status: 'processing',
-        startedAt: new Date(),
-      },
-    });
 
     const claimedJob =
   await prisma.job.updateMany({
@@ -47,9 +38,11 @@ new Worker(
   });
 
   if (claimedJob.count === 0) {
-    console.log(
-      `Job already claimed: ${job.data.jobId}`
-    );
+    logger.info({
+      jobId: job.data.jobId,
+      route: '/worker',
+      event: 'job_already_claimed',
+    });
   
     return;
   }
@@ -108,19 +101,26 @@ new Worker(
       });
     });
 
-    console.log(
-      `Completed processing ${dbJob.id}`
-    );
+    logger.info({
+      jobId: dbJob.id,
+      status: 'processing_completed',
+    });
     fs.unlinkSync(dbJob.filePath);
 
     } catch (error) {
-      console.error(error);
+      logger.error({
+        jobId: job.data.jobId,
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Unknown error',
+      });
 
       await prisma.job.update({
         where: {
           id: job.data.jobId,
           status: 'processing',
-        }
+        },
       
         data: {
           status: 'failed',
