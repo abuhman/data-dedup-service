@@ -53,9 +53,19 @@ new Worker(
       },
     });
 
-    const results = await processFile(
-      dbJob.filePath
-    );
+    await Promise.race([
+      processFile(dbJob.filePath),
+    
+      new Promise((_, reject) =>
+        setTimeout(() => {
+          reject(
+            new Error(
+              'Processing timeout'
+            )
+          );
+        }, 30000)
+      ),
+    ]);
 
     await prisma.$transaction(async (tx) => {
       await tx.result.deleteMany({
@@ -139,5 +149,6 @@ new Worker(
       host: 'localhost',
       port: 6379,
     },
+    concurrency: 5,
   }
 );

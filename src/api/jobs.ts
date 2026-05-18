@@ -11,8 +11,15 @@ import type {  RecordData,
 } from '../services/deduplicate.js';
 import { normalizeValue } from '../utils/normalize.js';
 import { jobQueue } from '../queue/queue.js';
+import { logger } from '../utils/logger';
 
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({
+  dest: 'uploads/',
+
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+  },
+});
 
 const router = Router();
 
@@ -25,6 +32,20 @@ router.post(
     if (!req.file) {
       return res.status(400).json({
         error: 'No file uploaded',
+      });
+    }
+
+    const waitingCount =
+    await jobQueue.getWaitingCount();
+
+    if (waitingCount > 100) {
+      logger.warn({
+        event: 'queue_overloaded',
+        waitingCount,
+      });
+      return res.status(503).json({
+        error:
+          'System overloaded. Try again later.',
       });
     }
 

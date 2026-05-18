@@ -2,11 +2,24 @@ import express from 'express';
 import jobsRouter from './api/jobs.js';
 import prisma from './db.js';
 import { logger } from './utils/logger.js';
+import rateLimit
+from 'express-rate-limit';
+
+const limiter = rateLimit({
+  windowMs: 60 * 1000,
+
+  max: 30,
+
+  message: {
+    error: 'Too many requests',
+  },
+});
 
 const app = express();
 
 app.use(express.json());
 app.use('/jobs', jobsRouter);
+app.use(limiter);
 
 const PORT = 3000;
 
