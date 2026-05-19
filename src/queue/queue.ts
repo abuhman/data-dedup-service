@@ -2,7 +2,7 @@ import { Queue } from 'bullmq';
 
 export const jobQueue = new Queue('deduplication', {
   connection: {
-    host: 'localhost',
+    host: 'redis',
     port: 6379,
   },
 });

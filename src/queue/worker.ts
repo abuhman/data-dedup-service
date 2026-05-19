@@ -53,19 +53,13 @@ new Worker(
       },
     });
 
-    await Promise.race([
-      processFile(dbJob.filePath),
-    
-      new Promise((_, reject) =>
-        setTimeout(() => {
-          reject(
-            new Error(
-              'Processing timeout'
-            )
-          );
-        }, 30000)
-      ),
-    ]);
+    const results = await Promise.race([
+        processFile(dbJob.filePath),
+      
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Processing timeout')), 30000)
+        ),
+      ]);
 
     await prisma.$transaction(async (tx) => {
       await tx.result.deleteMany({
@@ -126,7 +120,7 @@ new Worker(
             : 'Unknown error',
       });
 
-      await prisma.job.update({
+      await prisma.job.updateMany({
         where: {
           id: job.data.jobId,
           status: 'processing',
@@ -146,7 +140,7 @@ new Worker(
   },
   {
     connection: {
-      host: 'localhost',
+      host: 'redis',
       port: 6379,
     },
     concurrency: 5,
