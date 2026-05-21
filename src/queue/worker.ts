@@ -9,7 +9,8 @@ import type { RecordData } from '../services/deduplicate.js';
 import fs from 'fs';
 import { logger } from '../utils/logger';
 
-new Worker(
+let shuttingDown = false;
+const worker = new Worker(
   'deduplication',
   async (job) => {
     try {
@@ -56,8 +57,11 @@ new Worker(
     const results = await Promise.race([
         processFile(dbJob.filePath),
       
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Processing timeout')), 30000)
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error('Processing timeout')),
+            30000
+          )
         ),
       ]);
 
@@ -146,3 +150,23 @@ new Worker(
     concurrency: 5,
   }
 );
+const shutdown = async () => {
+    if (shuttingDown) {
+      return;
+    }
+  
+    shuttingDown = true;
+  
+    logger.info({
+      event: 'worker_shutdown_started',
+    });
+  
+    await worker.close();
+  
+    logger.info({
+      event: 'worker_shutdown_completed',
+    });
+  };
+  
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);

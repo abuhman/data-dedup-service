@@ -39,6 +39,20 @@ app.get('/health', (req, res) => {
   });
 });
 
+app.get('/ready', async (_, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+
+    res.json({
+      status: 'ready',
+    });
+  } catch {
+    res.status(503).json({
+      status: 'not_ready',
+    });
+  }
+});
+
 app.get('/metrics', async (_req, res) => {
   const [
     pending,
