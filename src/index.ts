@@ -54,6 +54,13 @@ app.get('/ready', async (_, res) => {
 });
 
 app.get('/metrics', async (_req, res) => {
+  const cached =
+  await getCache('metrics');
+  if (cached) {
+    return res.json(
+      JSON.parse(cached)
+    );
+  }
   const [
     pending,
     processing,
@@ -89,6 +96,11 @@ app.get('/metrics', async (_req, res) => {
       uptimeSeconds: process.uptime(),
     },
   });
+  await setCache(
+    'metrics',
+    JSON.stringify(metrics),
+    30
+  );
 });
 
 logger.info({
