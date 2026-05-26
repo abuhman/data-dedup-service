@@ -1,36 +1,45 @@
 version: "3.8"
 
 services:
-  app:
-    build: .
-    ports:
-      - "3000:3000"
-    depends_on:
-      - redis
-      - postgres
-    env_file:
-      - .env
-    volumes:
-      - ./uploads:/app/uploads
-
-  worker:
-    build: .
-    command: npm run worker
-    depends_on:
-      - redis
-      - postgres
-    env_file:
-      - .env
-    volumes:
-      - ./uploads:/app/uploads
-
-  redis:
-    image: redis
-
   postgres:
     image: postgres
     environment:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: dedupdb
     ports:
-      - "5432:5432"
+      - "5433:5432"
+
+  redis:
+    image: redis
+
+  migrate:
+    build: .
+    command: sh -c "npx prisma migrate deploy"
+    depends_on:
+      - postgres
+    env_file:
+      - .env
+
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    depends_on:
+      - migrate
+      - redis
+    env_file:
+      - .env
+    volumes:
+      - ./uploads:/app/uploads
+    command: npm run dev
+
+  worker:
+    build: .
+    depends_on:
+      - migrate
+      - redis
+    env_file:
+      - .env
+    volumes:
+      - ./uploads:/app/uploads
+    command: npm run worker

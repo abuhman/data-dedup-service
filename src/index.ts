@@ -4,6 +4,8 @@ import prisma from './db.js';
 import { logger } from './utils/logger.js';
 import rateLimit
 from 'express-rate-limit';
+import authRoutes from './routes/auth.js';
+import { getCache, setCache } from './utils/cache';
 
 const limiter = rateLimit({
   windowMs: 60 * 1000,
@@ -18,8 +20,11 @@ const limiter = rateLimit({
 const app = express();
 
 app.use(express.json());
+app.use('/jobs', limiter);
+app.use('/auth', limiter);
 app.use('/jobs', jobsRouter);
-app.use(limiter);
+app.use('/auth', authRoutes);
+console.log('AUTH ROUTES OBJECT:', authRoutes);
 
 const PORT = 3000;
 
@@ -54,53 +59,49 @@ app.get('/ready', async (_, res) => {
 });
 
 app.get('/metrics', async (_req, res) => {
-  const cached =
-  await getCache('metrics');
-  if (cached) {
-    return res.json(
-      JSON.parse(cached)
-    );
+  let cached;
+
+  try {
+    cached = await getCache('metrics');
+  } catch {
+    cached = null;
   }
-  const [
-    pending,
-    processing,
-    completed,
-    failed,
-  ] = await Promise.all([
-    prisma.job.count({
-      where: { status: 'pending' },
-    }),
 
-    prisma.job.count({
-      where: { status: 'processing' },
-    }),
+  if (cached) {
+    return res.json(JSON.parse(cached));
+  }
 
-    prisma.job.count({
-      where: { status: 'completed' },
-    }),
+  let pending = 0;
+  let processing = 0;
+  let completed = 0;
+  let failed = 0;
 
-    prisma.job.count({
-      where: { status: 'failed' },
-    }),
-  ]);
+  try {
+    [pending, processing, completed, failed] = await Promise.all([
+      prisma.job.count({ where: { status: 'pending' } }),
+      prisma.job.count({ where: { status: 'processing' } }),
+      prisma.job.count({ where: { status: 'completed' } }),
+      prisma.job.count({ where: { status: 'failed' } }),
+    ]);
+  } catch (err) {
+    logger.error({ err });
+    return res.status(500).json({ error: 'metrics_failed' });
+  }
 
-  res.json({
-    jobs: {
-      pending,
-      processing,
-      completed,
-      failed,
-    },
-
+  const metrics = {
+    jobs: { pending, processing, completed, failed },
     system: {
       uptimeSeconds: process.uptime(),
     },
-  });
-  await setCache(
-    'metrics',
-    JSON.stringify(metrics),
-    30
-  );
+  };
+
+  try {
+    await setCache('metrics', JSON.stringify(metrics), 30);
+  } catch (err) {
+    logger.error({ err });
+  }
+
+  return res.json(metrics);
 });
 
 logger.info({

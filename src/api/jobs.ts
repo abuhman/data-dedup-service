@@ -50,7 +50,7 @@ router.post(
     }
 
     const jobId = uuidv4();
-    await redis.del('metrics');
+
     await prisma.job.create({
       data: {
         id: jobId,
