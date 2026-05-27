@@ -1,7 +1,7 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { verifyToken } from '../utils/jwt.js';
 
-export function authMiddleware(
+export function auth(
   req: Request,
   res: Response,
   next: NextFunction

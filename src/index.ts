@@ -6,6 +6,7 @@ import rateLimit
 from 'express-rate-limit';
 import authRoutes from './routes/auth.js';
 import { getCache, setCache } from './utils/cache';
+import { auth } from './middleware/auth.js';
 
 const limiter = rateLimit({
   windowMs: 60 * 1000,
@@ -58,7 +59,8 @@ app.get('/ready', async (_, res) => {
   }
 });
 
-app.get('/metrics', async (_req, res) => {
+app.get('/metrics', auth, async (_req, res) => {
+  console.log("METRICS ROUTE HIT (UNPROTECTED OR PROTECTED)");
   let cached;
 
   try {
